@@ -890,7 +890,31 @@ function allExercises(){ return EXERCISES.concat(state.customExercises||[]); }
 
 /* ---------- curated technique videos (real, verified YouTube IDs, embedded in-app) ---------- */
 const EX_VIDEOS = {
-  /* filled in with verified {videoId, title, channel} per exercise id */
+  pushups:          {videoId:"jjwKTsl4HWE", title:"Как правильно отжиматься?"},
+  incline_pushups:  {videoId:"NJUu-w6F8jU", title:"Отжимания от лавки спереди: техника и нюансы"},
+  pullups:          {videoId:"n-Oa_C3aVVc", title:"Подтягивания. Правильная техника"},
+  easy_pullups:     {videoId:"WJCCoRopqow", title:"Негативные подтягивания. Уровень — начинающий"},
+  band_row:         {videoId:"xo7QIow0pn4", title:"Тяга в наклоне с резиной: техника и нюансы"},
+  squats:           {videoId:"51xwwaA5BnQ", title:"Приседания: техника выполнения"},
+  lunges:           {videoId:"JOmOdnVoWMU", title:"Выпады: техника выполнения"},
+  reverse_lunges:   {videoId:"-n201mLoEhg", title:"Обратные выпады. Техника выполнения"},
+  glute_bridge:     {videoId:"96SMWKjpYLg", title:"Как правильно делать ягодичный мост"},
+  plank:            {videoId:"3v-P5h0fBKg", title:"Планка на локтях. Техника, польза и основные ошибки"},
+  side_plank:       {videoId:"q4hzrrvIFtk", title:"Боковая планка. Техника выполнения"},
+  incline_plank:    {videoId:"rsnL2vfnb5o", title:"Plank Exercise Variations — Level 1 Incline Plank"},
+  deadbug:          {videoId:"bsNm4Q0HUhY", title:"Упражнение Dead Bug («мёртвый жук»)"},
+  birddog:          {videoId:"dzG0uFeLTq0", title:"Bird Dog: от простых движений к усложнённым"},
+  calf_raises:      {videoId:"tRdWzfKPCeg", title:"Подъём на носки стоя. Техника выполнения"},
+  stepups:          {videoId:"axsRoZoXMx0", title:"Зашагивания на тумбу или скамью. Техника выполнения"},
+  wallsit:          {videoId:"rfTLW05fvXk", title:"Стульчик у стены: для чего, какие мышцы, техника"},
+  warmup:           {videoId:"8uLfgnjOmQU", title:"Универсальная разминка перед тренировкой: 7 минут"},
+  mobility:         {videoId:"gkI95ypHTcs", title:"6 упражнений для мобильности суставов"},
+  walking:          {videoId:"I1jGzt-w0TU", title:"Кардио ходьба | 3500 шагов за 35 минут дома"},
+  march_in_place:   {videoId:"I7ZP8bbErJg", title:"Марш на месте"},
+  shoulder_circles: {videoId:"FbgSS3-Trq0", title:"Круговые вращения плечами"},
+  calf_stretch:     {videoId:"VUEmWI2VvDs", title:"Растяжка икроножной мышцы у стены"},
+  hamstring_stretch:{videoId:"B1OsVvs3dBM", title:"Растяжка задней поверхности бедра сидя"},
+  full_body:        {videoId:"MXVg6nVXTWU", title:"Тренировка на всё тело без инвентаря за 15 минут"},
 };
 function exerciseVideo(exId){ return EX_VIDEOS[exId] || null; }
 
