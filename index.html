@@ -240,6 +240,9 @@
   @keyframes slideUp{from{transform:translateY(30px); opacity:.4}to{transform:translateY(0); opacity:1}}
   .modal-handle{width:38px; height:4px; border-radius:4px; background:var(--card-border); margin:0 auto 14px;}
 
+  .video-embed{position:relative; width:100%; padding-top:56.25%; border-radius:var(--radius-tile); overflow:hidden; background:#000;}
+  .video-embed iframe{position:absolute; inset:0; width:100%; height:100%; border:0;}
+
   .toast-wrap{position:fixed; top:14px; left:0; right:0; display:flex; justify-content:center; z-index:200; pointer-events:none;}
   .toast{background:var(--bg2); border:1px solid var(--card-border); padding:11px 18px; border-radius:10px; font-size:13.5px; font-weight:700; box-shadow:3px 3px 0 0 color-mix(in srgb, var(--accent) 45%, transparent); animation:toastIn .3s ease, toastOut .3s ease 2.4s forwards;}
   @keyframes toastIn{from{opacity:0; transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
@@ -510,7 +513,7 @@
 
     <div class="card">
       <div class="row between"><h4>📲 Установить приложение</h4></div>
-      <p class="small muted" id="pwaHint">Установи FitTrack на домашний экран, чтобы открывать его как обычное приложение.</p>
+      <p class="small muted" id="pwaHint">Установи FitTrack на домашний экран, чтобы открывать его как обычное приложение. Тренировки, таймеры и прогресс работают даже без интернета — удобно в зале со слабым сигналом.</p>
       <button class="btn btn-primary btn-block" style="margin-top:10px; display:none;" id="btnInstallPwa">📲 Установить</button>
     </div>
 
@@ -679,6 +682,13 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="modalVideo">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="videoModalContent"></div>
+  </div>
+</div>
+
 <script>
 (function(){
 "use strict";
@@ -690,6 +700,27 @@
 
 const STORAGE_KEY = "fittrack_state_v1";
 const DAY_MS = 86400000;
+
+/* ---------- offline support (works in a gym with no/weak signal) ---------- */
+if("serviceWorker" in navigator && (location.protocol==="http:" || location.protocol==="https:")){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js").catch(()=>{ /* offline caching unavailable, app still works online */ });
+  });
+}
+
+/* ---------- keep the screen awake during a workout ---------- */
+let wakeLock = null;
+async function requestWakeLock(){
+  try{
+    if("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
+  }catch(e){ /* not supported / permission denied, ignore */ }
+}
+function releaseWakeLock(){
+  try{ if(wakeLock){ wakeLock.release(); wakeLock = null; } }catch(e){}
+}
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState==="visible" && document.getElementById("modalWorkout").classList.contains("open")) requestWakeLock();
+});
 
 /* ---------- PWA install prompt ---------- */
 let deferredInstallPrompt = null;
@@ -856,6 +887,12 @@ const EXERCISES = [
 ];
 const EX_BY_ID = Object.fromEntries(EXERCISES.map(e=>[e.id,e]));
 function allExercises(){ return EXERCISES.concat(state.customExercises||[]); }
+
+/* ---------- curated technique videos (real, verified YouTube IDs, embedded in-app) ---------- */
+const EX_VIDEOS = {
+  /* filled in with verified {videoId, title, channel} per exercise id */
+};
+function exerciseVideo(exId){ return EX_VIDEOS[exId] || null; }
 
 /* ---------- 90-day challenge template ---------- */
 const DAY_TEMPLATES = [
@@ -1336,6 +1373,28 @@ function openDayModal(idx){
 }
 
 /* =========================================================
+   VIDEO MODAL (in-app YouTube embed)
+   ========================================================= */
+function openVideoModal(exId){
+  const ex = EX_BY_ID[exId];
+  const vid = exerciseVideo(exId);
+  const searchHref = ytSearchUrl(ex.name+" техника выполнения");
+  document.getElementById("videoModalContent").innerHTML = vid ? `
+    <h3>${ex.icon} ${ex.name}</h3>
+    <p class="small muted" style="margin-top:2px;">${vid.title}</p>
+    <div class="video-embed" style="margin-top:12px;">
+      <iframe src="https://www.youtube-nocookie.com/embed/${vid.videoId}?autoplay=1&rel=0" title="${ex.name}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="eager"></iframe>
+    </div>
+    <a class="btn btn-ghost btn-block" style="margin-top:12px; text-decoration:none; display:block; box-sizing:border-box;" target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=${vid.videoId}">Открыть на YouTube ↗</a>
+  ` : `
+    <h3>${ex.icon} ${ex.name}</h3>
+    <p class="small muted" style="margin-top:8px;">Видео для этого упражнения пока не подобрано в приложении.</p>
+    <a class="btn btn-primary btn-block" style="margin-top:12px; text-decoration:none; display:block; box-sizing:border-box;" target="_blank" rel="noopener" href="${searchHref}">🔎 Искать на YouTube</a>
+  `;
+  openModal("modalVideo");
+}
+
+/* =========================================================
    EXERCISE MODAL / LIBRARY
    ========================================================= */
 function openExerciseModal(exId){
@@ -1353,10 +1412,11 @@ function openExerciseModal(exId){
       <div class="stat"><div class="v">${ex.reps}</div><div class="k">повторы</div></div>
       <div class="stat"><div class="v">${ex.rest}с</div><div class="k">отдых</div></div>
     </div>
-    <a class="btn btn-primary btn-block" style="margin-top:14px; text-decoration:none; display:block; box-sizing:border-box;" target="_blank" rel="noopener" href="${ytSearchUrl(ex.name+" техника выполнения")}">▶️ Смотреть на YouTube</a>
+    <button class="btn btn-primary btn-block" style="margin-top:14px;" id="btnWatchVideoFromEx" data-ex="${ex.id}">▶️ Смотреть видео техники</button>
     <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btnAddPrFromEx" data-ex="${ex.id}">🏅 Записать рекорд</button>
   `;
   openModal("modalExercise");
+  document.getElementById("btnWatchVideoFromEx").addEventListener("click", ()=> openVideoModal(exId));
   document.getElementById("btnAddPrFromEx").addEventListener("click", ()=>{
     closeModal("modalExercise");
     openPrModal(exId);
@@ -1439,7 +1499,7 @@ function renderWorkoutRunner(){
   document.getElementById("workoutModalContent").innerHTML = `
     <p class="small muted">EXERCISE ${workoutRun.exIndex+1} / ${total}</p>
     <h3>${ex.icon} ${ex.name}</h3>
-    <a href="${ytSearchUrl(ex.name+" техника выполнения")}" target="_blank" rel="noopener" class="pill pill-accent" style="text-decoration:none; margin-top:4px; display:inline-block;">▶️ Видео техники</a>
+    <button id="runnerVideoBtn" class="pill pill-accent" style="font-family:inherit; cursor:pointer; margin-top:4px; display:inline-block;">▶️ Видео техники</button>
     <p class="small muted" style="margin-top:8px;">${cur.sets} подхода(ов) · ${cur.reps}</p>
     <div class="row wrap" style="margin-top:10px; gap:6px;" id="runnerSets">
       ${Array.from({length:cur.sets}).map((_,i)=>`<button class="chip ${i<cur.doneSets?'on':''}" data-setidx="${i}">Подход ${i+1}${i<cur.doneSets?' ✓':''}</button>`).join("")}
@@ -1486,6 +1546,7 @@ function renderWorkoutRunner(){
   });
   document.getElementById("runnerSkip").addEventListener("click", advanceExercise);
   document.getElementById("runnerNext").addEventListener("click", advanceExercise);
+  document.getElementById("runnerVideoBtn").addEventListener("click", ()=> openVideoModal(cur.exerciseId));
 }
 function fmtTimer(sec){ sec=Math.max(0,Math.round(sec)); return pad2(Math.floor(sec/60))+":"+pad2(sec%60); }
 
@@ -2216,8 +2277,18 @@ document.getElementById("btnChangeWorkout").addEventListener("click", ()=> openB
 /* =========================================================
    NAVIGATION / MODAL PLUMBING
    ========================================================= */
-function openModal(id){ document.getElementById(id).classList.add("open"); }
-function closeModal(id){ document.getElementById(id).classList.remove("open"); }
+function openModal(id){
+  document.getElementById(id).classList.add("open");
+  if(id==="modalWorkout") requestWakeLock(); // don't let the screen lock mid-set at the gym
+}
+function closeModal(id){
+  document.getElementById(id).classList.remove("open");
+  if(id==="modalWorkout") releaseWakeLock();
+  if(id==="modalVideo"){
+    const c = document.getElementById("videoModalContent");
+    if(c) c.innerHTML = ""; // stops YouTube playback when the modal closes
+  }
+}
 document.querySelectorAll(".modal-backdrop").forEach(bd=>{
   bd.addEventListener("click", (e)=>{ if(e.target===bd) closeModal(bd.id); });
 });
