@@ -240,9 +240,6 @@
   @keyframes slideUp{from{transform:translateY(30px); opacity:.4}to{transform:translateY(0); opacity:1}}
   .modal-handle{width:38px; height:4px; border-radius:4px; background:var(--card-border); margin:0 auto 14px;}
 
-  .video-embed{position:relative; width:100%; padding-top:56.25%; border-radius:var(--radius-tile); overflow:hidden; background:#000;}
-  .video-embed iframe{position:absolute; inset:0; width:100%; height:100%; border:0;}
-
   .pose-box{background:var(--card); border:1px solid var(--card-border); border-radius:var(--radius-tile); display:flex; align-items:center; justify-content:center; padding:10px;}
   .pose-box svg{width:104px; height:104px; color:var(--accent); display:block;}
 
@@ -533,11 +530,6 @@
       <div id="coachAdvice"></div>
     </div>
     <div class="card">
-      <h4>📺 Видео-тренер</h4>
-      <p class="small muted">Технику упражнений можно посмотреть у Kadir UzSports — канал с домашними тренировками на всё тело.</p>
-      <a class="btn btn-primary btn-block" style="margin-top:10px; text-decoration:none; display:block; box-sizing:border-box;" target="_blank" rel="noopener" href="https://www.youtube.com/@kadiruzsports">▶️ Открыть канал Kadir UzSports</a>
-    </div>
-    <div class="card">
       <div class="row between"><h4>Диагностика приложения</h4></div>
       <p class="small muted">Проверка данных, календаря, таймеров и кнопок. Безопасные ошибки чинятся автоматически.</p>
       <button class="btn btn-primary btn-block" style="margin-top:10px;" id="btnRunDiagnostics">✨ Проверить приложение</button>
@@ -728,13 +720,6 @@
   </div>
 </div>
 
-<div class="modal-backdrop" id="modalVideo">
-  <div class="modal">
-    <div class="modal-handle"></div>
-    <div id="videoModalContent"></div>
-  </div>
-</div>
-
 <script>
 (function(){
 "use strict";
@@ -796,9 +781,6 @@ function diffDays(a,b){ // a - b in whole days, ignoring time
 }
 function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
 function uid(){ return Math.random().toString(36).slice(2,9); }
-function ytSearchUrl(q){ return "https://www.youtube.com/results?search_query="+encodeURIComponent(q); }
-const KADIRUZ_CHANNEL_URL = "https://www.youtube.com/@kadiruzsports";
-function kadirSearchUrl(q){ return ytSearchUrl("kadiruzsports "+q); }
 
 function toast(msg){
   const wrap = document.getElementById("toastWrap");
@@ -1012,36 +994,6 @@ const EXERCISES = [
 ];
 const EX_BY_ID = Object.fromEntries(EXERCISES.map(e=>[e.id,e]));
 function allExercises(){ return EXERCISES.concat(state.customExercises||[]); }
-
-/* ---------- curated technique videos (real, verified YouTube IDs, embedded in-app) ---------- */
-const EX_VIDEOS = {
-  pushups:          {videoId:"jjwKTsl4HWE", title:"Как правильно отжиматься?"},
-  incline_pushups:  {videoId:"NJUu-w6F8jU", title:"Отжимания от лавки спереди: техника и нюансы"},
-  pullups:          {videoId:"n-Oa_C3aVVc", title:"Подтягивания. Правильная техника"},
-  easy_pullups:     {videoId:"WJCCoRopqow", title:"Негативные подтягивания. Уровень — начинающий"},
-  band_row:         {videoId:"xo7QIow0pn4", title:"Тяга в наклоне с резиной: техника и нюансы"},
-  squats:           {videoId:"51xwwaA5BnQ", title:"Приседания: техника выполнения"},
-  lunges:           {videoId:"JOmOdnVoWMU", title:"Выпады: техника выполнения"},
-  reverse_lunges:   {videoId:"-n201mLoEhg", title:"Обратные выпады. Техника выполнения"},
-  glute_bridge:     {videoId:"96SMWKjpYLg", title:"Как правильно делать ягодичный мост"},
-  plank:            {videoId:"3v-P5h0fBKg", title:"Планка на локтях. Техника, польза и основные ошибки"},
-  side_plank:       {videoId:"q4hzrrvIFtk", title:"Боковая планка. Техника выполнения"},
-  incline_plank:    {videoId:"rsnL2vfnb5o", title:"Plank Exercise Variations — Level 1 Incline Plank"},
-  deadbug:          {videoId:"bsNm4Q0HUhY", title:"Упражнение Dead Bug («мёртвый жук»)"},
-  birddog:          {videoId:"dzG0uFeLTq0", title:"Bird Dog: от простых движений к усложнённым"},
-  calf_raises:      {videoId:"tRdWzfKPCeg", title:"Подъём на носки стоя. Техника выполнения"},
-  stepups:          {videoId:"axsRoZoXMx0", title:"Зашагивания на тумбу или скамью. Техника выполнения"},
-  wallsit:          {videoId:"rfTLW05fvXk", title:"Стульчик у стены: для чего, какие мышцы, техника"},
-  warmup:           {videoId:"8uLfgnjOmQU", title:"Универсальная разминка перед тренировкой: 7 минут"},
-  mobility:         {videoId:"gkI95ypHTcs", title:"6 упражнений для мобильности суставов"},
-  walking:          {videoId:"I1jGzt-w0TU", title:"Кардио ходьба | 3500 шагов за 35 минут дома"},
-  march_in_place:   {videoId:"I7ZP8bbErJg", title:"Марш на месте"},
-  shoulder_circles: {videoId:"FbgSS3-Trq0", title:"Круговые вращения плечами"},
-  calf_stretch:     {videoId:"VUEmWI2VvDs", title:"Растяжка икроножной мышцы у стены"},
-  hamstring_stretch:{videoId:"B1OsVvs3dBM", title:"Растяжка задней поверхности бедра сидя"},
-  full_body:        {videoId:"MXVg6nVXTWU", title:"Тренировка на всё тело без инвентаря за 15 минут"},
-};
-function exerciseVideo(exId){ return EX_VIDEOS[exId] || null; }
 
 /* ---------- technique pose illustrations (self-contained SVG — always renders, no network needed) ---------- */
 const POSES = {
@@ -1641,28 +1593,6 @@ function openDayModal(idx){
 /* =========================================================
    VIDEO MODAL (in-app YouTube embed)
    ========================================================= */
-function openVideoModal(exId){
-  const ex = EX_BY_ID[exId];
-  const vid = exerciseVideo(exId);
-  const kadirHref = kadirSearchUrl(ex.name);
-  const kadirBtn = `<a class="btn btn-primary btn-block" style="margin-top:8px; text-decoration:none; display:block; box-sizing:border-box;" target="_blank" rel="noopener" href="${kadirHref}">🔎 Искать у Kadir UzSports</a>`;
-  document.getElementById("videoModalContent").innerHTML = vid ? `
-    <h3>${ex.icon} ${ex.name}</h3>
-    <p class="small muted" style="margin-top:2px;">${vid.title}</p>
-    <div class="video-embed" style="margin-top:12px;">
-      <iframe src="https://www.youtube-nocookie.com/embed/${vid.videoId}?autoplay=1&rel=0" title="${ex.name}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="eager"></iframe>
-    </div>
-    <a class="btn btn-ghost btn-block" style="margin-top:12px; text-decoration:none; display:block; box-sizing:border-box;" target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=${vid.videoId}">Открыть на YouTube ↗</a>
-    ${kadirBtn}
-  ` : `
-    <h3>${ex.icon} ${ex.name}</h3>
-    <p class="small muted" style="margin-top:8px;">Видео для этого упражнения пока не подобрано в приложении.</p>
-    ${kadirBtn}
-    <a class="btn btn-ghost btn-block" style="margin-top:8px; text-decoration:none; display:block; box-sizing:border-box;" target="_blank" rel="noopener" href="${ytSearchUrl(ex.name+" техника выполнения")}">🔎 Искать на YouTube</a>
-  `;
-  openModal("modalVideo");
-}
-
 /* =========================================================
    EXERCISE MODAL / LIBRARY
    ========================================================= */
@@ -1682,11 +1612,9 @@ function openExerciseModal(exId){
       <div class="stat"><div class="v">${ex.reps}</div><div class="k">повторы</div></div>
       <div class="stat"><div class="v">${ex.rest}с</div><div class="k">отдых</div></div>
     </div>
-    <button class="btn btn-primary btn-block" style="margin-top:14px;" id="btnWatchVideoFromEx" data-ex="${ex.id}">▶️ Смотреть видео техники</button>
-    <button class="btn btn-ghost btn-block" style="margin-top:8px;" id="btnAddPrFromEx" data-ex="${ex.id}">🏅 Записать рекорд</button>
+    <button class="btn btn-primary btn-block" style="margin-top:14px;" id="btnAddPrFromEx" data-ex="${ex.id}">🏅 Записать рекорд</button>
   `;
   openModal("modalExercise");
-  document.getElementById("btnWatchVideoFromEx").addEventListener("click", ()=> openVideoModal(exId));
   document.getElementById("btnAddPrFromEx").addEventListener("click", ()=>{
     closeModal("modalExercise");
     openPrModal(exId);
@@ -1772,7 +1700,6 @@ function renderWorkoutRunner(){
     <h3>${ex.icon} ${ex.name}</h3>
     <div class="pose-box" style="margin-top:8px;">${exercisePoseSvg(ex.id)}</div>
     <div class="row wrap" style="gap:6px; margin-top:8px;">
-      <button id="runnerVideoBtn" class="pill pill-accent" style="font-family:inherit; cursor:pointer;">▶️ Видео техники</button>
       <button id="runnerBeatBtn" class="pill ${workoutBeat.playing?'pill-accent':''}" style="font-family:inherit; cursor:pointer;">${workoutBeat.playing?'🎵 Бит вкл':'🔕 Бит выкл'}</button>
     </div>
     <p class="small muted" style="margin-top:8px;">${cur.sets} подхода(ов) · ${cur.reps}</p>
@@ -1821,7 +1748,6 @@ function renderWorkoutRunner(){
   });
   document.getElementById("runnerSkip").addEventListener("click", advanceExercise);
   document.getElementById("runnerNext").addEventListener("click", advanceExercise);
-  document.getElementById("runnerVideoBtn").addEventListener("click", ()=> openVideoModal(cur.exerciseId));
   document.getElementById("runnerBeatBtn").addEventListener("click", ()=>{
     toggleWorkoutBeat();
     state.settings.music = workoutBeat.playing;
@@ -2719,16 +2645,10 @@ document.getElementById("btnChangeWorkout").addEventListener("click", ()=> openB
 function openModal(id){
   document.getElementById(id).classList.add("open");
   if(id==="modalWorkout"){ requestWakeLock(); if(state.settings.music!==false) startWorkoutBeat(); } // don't let the screen lock mid-set at the gym
-  if(id==="modalVideo") stopWorkoutBeat(); // don't fight the video's own audio
 }
 function closeModal(id){
   document.getElementById(id).classList.remove("open");
   if(id==="modalWorkout"){ releaseWakeLock(); stopWorkoutBeat(); try{ speechSynthesis.cancel(); }catch(e){} }
-  if(id==="modalVideo"){
-    const c = document.getElementById("videoModalContent");
-    if(c) c.innerHTML = ""; // stops YouTube playback when the modal closes
-    if(state.settings.music!==false && document.getElementById("modalWorkout").classList.contains("open")) startWorkoutBeat(); // resume the beat if the workout is still running underneath
-  }
 }
 document.querySelectorAll(".modal-backdrop").forEach(bd=>{
   bd.addEventListener("click", (e)=>{ if(e.target===bd) closeModal(bd.id); });
