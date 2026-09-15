@@ -458,6 +458,24 @@
       <div class="stat"><div class="v" id="pStatDays">0</div><div class="k">дней пройдено</div></div>
     </div>
     <div class="card">
+      <div class="row between"><h4>🫀 Карта мышц</h4>
+        <div class="row" style="gap:6px;">
+          <button class="chip on" id="bodyViewFront" data-view="front">Спереди</button>
+          <button class="chip" id="bodyViewBack" data-view="back">Сзади</button>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:center; margin-top:10px;">
+        <div id="bodyMapSvg" style="width:150px;"></div>
+      </div>
+      <div class="row" style="gap:8px; align-items:center; margin-top:10px; justify-content:center;">
+        <span class="small muted">Меньше</span>
+        <div style="flex:1; max-width:140px; height:8px; border-radius:4px; background:linear-gradient(90deg, var(--card-border), var(--accent));"></div>
+        <span class="small muted">Больше</span>
+      </div>
+      <h4 style="margin-top:16px;">Распределение</h4>
+      <div id="muscleDistribution" style="margin-top:8px;"></div>
+    </div>
+    <div class="card">
       <h4>Последние 7 дней — активность</h4>
       <svg id="chartActivity" width="100%" height="120" viewBox="0 0 280 120"></svg>
     </div>
@@ -1083,6 +1101,20 @@ const EX_POSE = {
 };
 function exercisePoseSvg(exId){ return POSES[EX_POSE[exId]] || POSES.full_body; }
 
+/* ---------- muscle-group volume tracking (for the body map) ---------- */
+const MUSCLE_GROUPS = ["chest","back","shoulders","arms","legs","core"];
+const MUSCLE_LABELS = {chest:"Грудь", back:"Спина", shoulders:"Плечи", arms:"Руки", legs:"Ноги", core:"Кор"};
+const EX_MUSCLES = {
+  pushups:["chest","shoulders","arms"], incline_pushups:["chest","shoulders","arms"],
+  pullups:["back","arms"], easy_pullups:["back","arms"], band_row:["back","arms"],
+  squats:["legs"], lunges:["legs"], reverse_lunges:["legs"], stepups:["legs"], wallsit:["legs"],
+  glute_bridge:["legs"], calf_raises:["legs"],
+  plank:["core"], side_plank:["core"], incline_plank:["core"], deadbug:["core"], birddog:["core","back"],
+  full_body:["chest","legs","core"],
+  // warmup / mobility / stretching / walking are excluded on purpose — they're not working sets
+};
+function musclesForExercise(exId){ return EX_MUSCLES[exId] || []; }
+
 /* ---------- 90-day challenge template ---------- */
 const DAY_TEMPLATES = [
   {title:"Полное тело", category:"full_body", exIds:["warmup","full_body","pushups","squats","plank"]},
@@ -1185,6 +1217,7 @@ function defaultState(){
     activeCustomPlanForDay: {}, // dateStr -> planId or 'default'
     streakHistory: [],      // list of {date, streak}
     settings: {sound:true, vibration:true, music:true},
+    muscleVolume: {chest:0, back:0, shoulders:0, arms:0, legs:0, core:0}, // completed working sets per muscle group
     personalRecords: {},    // exerciseId -> {value, unit, date}
     workoutHistory: [],     // {date, title, exercisesCount, setsCount, durationSec, xp, rpe}
     customExercises: [],    // user-created exercises, same shape as EXERCISES + custom:true
@@ -1387,6 +1420,13 @@ function ruDays(n){
   if(mod10===1) return "день";
   if(mod10>=2&&mod10<=4) return "дня";
   return "дней";
+}
+function ruSets(n){
+  const mod10=n%10, mod100=n%100;
+  if(mod100>=11&&mod100<=14) return "подходов";
+  if(mod10===1) return "подход";
+  if(mod10>=2&&mod10<=4) return "подхода";
+  return "подходов";
 }
 
 function getEffectiveDay(idx, dateStr){
@@ -1803,6 +1843,11 @@ function finishWorkout(){
     date: todayStr(), title: workoutRun.title, exercisesCount: total, setsCount: sets, durationSec, xp: 50
   });
   if(state.workoutHistory.length>200) state.workoutHistory = state.workoutHistory.slice(0,200);
+  workoutRun.exercises.forEach(e=>{
+    musclesForExercise(e.exerciseId).forEach(g=>{
+      state.muscleVolume[g] = (state.muscleVolume[g]||0) + (e.doneSets||0);
+    });
+  });
   saveState();
   document.getElementById("workoutModalContent").innerHTML = `
     <div style="text-align:center; padding:10px 0;">
@@ -1958,7 +2003,81 @@ function renderCharts(){
   document.getElementById("streakHistory").textContent = hist.length
     ? hist.map(h=> h.date.slice(5)+": 🔥"+h.streak).join("  ·  ")
     : "Пока нет истории — начни первую тренировку!";
+
+  renderMuscleMap();
 }
+
+/* ---------- muscle body map (front/back SVG, colored by relative volume) ---------- */
+function muscleColor(pct){ return `color-mix(in srgb, var(--accent) ${Math.round(pct*100)}%, var(--card-border))`; }
+function bodyFrontSvg(v){
+  return `<svg viewBox="0 0 200 340" style="width:100%; height:auto; display:block;">
+    <circle cx="100" cy="24" r="18" fill="var(--card-border)"/>
+    <rect x="93" y="38" width="14" height="14" fill="var(--card-border)"/>
+    <rect x="71" y="52" width="58" height="48" rx="16" fill="${muscleColor(v.chest)}"/>
+    <ellipse cx="61" cy="65" rx="16" ry="14" fill="${muscleColor(v.shoulders)}"/>
+    <ellipse cx="139" cy="65" rx="16" ry="14" fill="${muscleColor(v.shoulders)}"/>
+    <rect x="41" y="58" width="16" height="50" rx="8" fill="${muscleColor(v.arms)}"/>
+    <rect x="143" y="58" width="16" height="50" rx="8" fill="${muscleColor(v.arms)}"/>
+    <rect x="39" y="106" width="14" height="44" rx="7" fill="${muscleColor(v.arms)}"/>
+    <rect x="147" y="106" width="14" height="44" rx="7" fill="${muscleColor(v.arms)}"/>
+    <rect x="77" y="98" width="46" height="52" rx="13" fill="${muscleColor(v.core)}"/>
+    <rect x="73" y="148" width="25" height="8" fill="var(--card-border)"/>
+    <rect x="102" y="148" width="25" height="8" fill="var(--card-border)"/>
+    <rect x="71" y="154" width="26" height="114" rx="13" fill="${muscleColor(v.legs)}"/>
+    <rect x="103" y="154" width="26" height="114" rx="13" fill="${muscleColor(v.legs)}"/>
+    <ellipse cx="84" cy="276" rx="14" ry="7" fill="var(--card-border)"/>
+    <ellipse cx="116" cy="276" rx="14" ry="7" fill="var(--card-border)"/>
+  </svg>`;
+}
+function bodyBackSvg(v){
+  return `<svg viewBox="0 0 200 340" style="width:100%; height:auto; display:block;">
+    <circle cx="100" cy="24" r="18" fill="var(--card-border)"/>
+    <rect x="93" y="38" width="14" height="14" fill="var(--card-border)"/>
+    <path d="M71 52 Q100 46 129 52 L129 114 Q100 123 71 114 Z" fill="${muscleColor(v.back)}"/>
+    <ellipse cx="61" cy="65" rx="16" ry="14" fill="${muscleColor(v.shoulders)}"/>
+    <ellipse cx="139" cy="65" rx="16" ry="14" fill="${muscleColor(v.shoulders)}"/>
+    <rect x="41" y="58" width="16" height="50" rx="8" fill="${muscleColor(v.arms)}"/>
+    <rect x="143" y="58" width="16" height="50" rx="8" fill="${muscleColor(v.arms)}"/>
+    <rect x="39" y="106" width="14" height="44" rx="7" fill="${muscleColor(v.arms)}"/>
+    <rect x="147" y="106" width="14" height="44" rx="7" fill="${muscleColor(v.arms)}"/>
+    <rect x="71" y="154" width="26" height="114" rx="13" fill="${muscleColor(v.legs)}"/>
+    <rect x="103" y="154" width="26" height="114" rx="13" fill="${muscleColor(v.legs)}"/>
+    <ellipse cx="84" cy="276" rx="14" ry="7" fill="var(--card-border)"/>
+    <ellipse cx="116" cy="276" rx="14" ry="7" fill="var(--card-border)"/>
+  </svg>`;
+}
+let bodyMapView = "front";
+function renderMuscleMap(){
+  const mv = state.muscleVolume || {};
+  const max = Math.max(1, ...MUSCLE_GROUPS.map(g=> mv[g]||0));
+  const norm = {}; MUSCLE_GROUPS.forEach(g=> norm[g] = (mv[g]||0)/max);
+  document.getElementById("bodyMapSvg").innerHTML = bodyMapView==="front" ? bodyFrontSvg(norm) : bodyBackSvg(norm);
+
+  const sorted = MUSCLE_GROUPS.slice().sort((a,b)=> (mv[b]||0)-(mv[a]||0));
+  document.getElementById("muscleDistribution").innerHTML = sorted.map(g=>{
+    const val = mv[g]||0;
+    const pct = Math.round((val/max)*100);
+    return `<div class="row" style="align-items:center; gap:10px; margin-top:6px;">
+      <span class="small" style="width:60px;">${MUSCLE_LABELS[g]}</span>
+      <div style="flex:1; height:8px; border-radius:4px; background:var(--card-border); overflow:hidden;">
+        <div style="width:${pct}%; height:100%; background:var(--accent);"></div>
+      </div>
+      <span class="small muted" style="width:76px; text-align:right;">${val} ${ruSets(val)}</span>
+    </div>`;
+  }).join("");
+}
+document.getElementById("bodyViewFront").addEventListener("click", ()=>{
+  bodyMapView = "front";
+  document.getElementById("bodyViewFront").classList.add("on");
+  document.getElementById("bodyViewBack").classList.remove("on");
+  renderMuscleMap();
+});
+document.getElementById("bodyViewBack").addEventListener("click", ()=>{
+  bodyMapView = "back";
+  document.getElementById("bodyViewBack").classList.add("on");
+  document.getElementById("bodyViewFront").classList.remove("on");
+  renderMuscleMap();
+});
 
 /* ---------- Personal records ---------- */
 function renderPrList(){
