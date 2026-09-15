@@ -500,6 +500,23 @@
       <div id="prList" style="margin-top:8px;"></div>
     </div>
     <div class="card">
+      <h4>⚖️ Вес и замеры тела</h4>
+      <div class="grid3" style="margin-top:8px;">
+        <div><label class="field-label">Вес (кг)</label><input type="number" id="bmWeight" step="0.1" min="0" placeholder="70"></div>
+        <div><label class="field-label">Талия (см)</label><input type="number" id="bmWaist" step="0.5" min="0" placeholder="80"></div>
+        <div><label class="field-label">Грудь (см)</label><input type="number" id="bmChest" step="0.5" min="0" placeholder="95"></div>
+      </div>
+      <div class="grid2" style="margin-top:8px;">
+        <div><label class="field-label">Бицепс (см)</label><input type="number" id="bmArm" step="0.5" min="0" placeholder="32"></div>
+        <div><label class="field-label">Бедро (см)</label><input type="number" id="bmThigh" step="0.5" min="0" placeholder="55"></div>
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-top:10px;" id="btnSaveBodyMetrics">Сохранить на сегодня</button>
+      <h4 style="margin-top:16px;">Вес — тренд</h4>
+      <svg id="chartWeight" width="100%" height="120" viewBox="0 0 280 120"></svg>
+      <p class="small muted" id="chartWeightEmpty" style="text-align:center; margin-top:6px;">Пока нет ни одной записи веса.</p>
+      <div id="bodyMetricsHistory" style="margin-top:10px;"></div>
+    </div>
+    <div class="card">
       <h4>📜 История тренировок</h4>
       <div id="historyList" style="margin-top:8px;"></div>
     </div>
@@ -514,6 +531,11 @@
     <div class="card" id="coachAdviceCard">
       <h4>Советы на сегодня</h4>
       <div id="coachAdvice"></div>
+    </div>
+    <div class="card">
+      <h4>📺 Видео-тренер</h4>
+      <p class="small muted">Технику упражнений можно посмотреть у Kadir UzSports — канал с домашними тренировками на всё тело.</p>
+      <a class="btn btn-primary btn-block" style="margin-top:10px; text-decoration:none; display:block; box-sizing:border-box;" target="_blank" rel="noopener" href="https://www.youtube.com/@kadiruzsports">▶️ Открыть канал Kadir UzSports</a>
     </div>
     <div class="card">
       <div class="row between"><h4>Диагностика приложения</h4></div>
@@ -555,8 +577,9 @@
         <button class="chip" id="toggleSound" data-key="sound">🔊 Звук</button>
         <button class="chip" id="toggleVibration" data-key="vibration">📳 Вибрация</button>
         <button class="chip" id="toggleMusic" data-key="music">🎵 Музыка</button>
+        <button class="chip" id="toggleVoice" data-key="voice">🗣 Голос</button>
       </div>
-      <p class="small muted" style="margin-top:8px;">Музыка — это бит, который генерируется прямо в приложении (без интернета и авторских прав), чтобы держать темп во время тренировки.</p>
+      <p class="small muted" style="margin-top:8px;">Голос называет упражнение и считает «3-2-1», чтобы не смотреть в телефон во время подхода. Музыка — это бит, который генерируется прямо в приложении (без интернета и авторских прав), чтобы держать темп во время тренировки.</p>
     </div>
 
     <div class="card">
@@ -774,6 +797,8 @@ function diffDays(a,b){ // a - b in whole days, ignoring time
 function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
 function uid(){ return Math.random().toString(36).slice(2,9); }
 function ytSearchUrl(q){ return "https://www.youtube.com/results?search_query="+encodeURIComponent(q); }
+const KADIRUZ_CHANNEL_URL = "https://www.youtube.com/@kadiruzsports";
+function kadirSearchUrl(q){ return ytSearchUrl("kadiruzsports "+q); }
 
 function toast(msg){
   const wrap = document.getElementById("toastWrap");
@@ -786,6 +811,17 @@ function toast(msg){
 function vibrate(pattern){
   if(state && state.settings && state.settings.vibration===false) return;
   try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){}
+}
+
+function speak(text){
+  if(state && state.settings && state.settings.voice===false) return;
+  try{
+    if(!("speechSynthesis" in window)) return;
+    speechSynthesis.cancel(); // keep cues snappy — don't let them queue up behind the timer
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "ru-RU"; u.rate = 1.05; u.volume = 0.9;
+    speechSynthesis.speak(u);
+  }catch(e){ /* speech unsupported, ignore silently */ }
 }
 
 let audioCtx = null;
@@ -802,7 +838,7 @@ function beep(freq, dur){
   }catch(e){ /* audio unsupported, ignore silently */ }
 }
 function countdownTick(remaining){
-  if(remaining===3 || remaining===2 || remaining===1){ beep(520,0.12); vibrate(25); }
+  if(remaining===3 || remaining===2 || remaining===1){ beep(520,0.12); vibrate(25); speak(String(remaining)); }
 }
 
 /* ---------- generated workout beat (offline, royalty-free — built in the browser, no file to fetch) ---------- */
@@ -1216,8 +1252,9 @@ function defaultState(){
     customWorkouts: [],     // saved custom plans {id,name,exIds:[]}
     activeCustomPlanForDay: {}, // dateStr -> planId or 'default'
     streakHistory: [],      // list of {date, streak}
-    settings: {sound:true, vibration:true, music:true},
+    settings: {sound:true, vibration:true, music:true, voice:true},
     muscleVolume: {chest:0, back:0, shoulders:0, arms:0, legs:0, core:0}, // completed working sets per muscle group
+    bodyMetrics: {}, // dateStr -> {weight, waist, chest, arm, thigh} (кг / см, all optional)
     personalRecords: {},    // exerciseId -> {value, unit, date}
     workoutHistory: [],     // {date, title, exercisesCount, setsCount, durationSec, xp, rpe}
     customExercises: [],    // user-created exercises, same shape as EXERCISES + custom:true
@@ -1607,7 +1644,8 @@ function openDayModal(idx){
 function openVideoModal(exId){
   const ex = EX_BY_ID[exId];
   const vid = exerciseVideo(exId);
-  const searchHref = ytSearchUrl(ex.name+" техника выполнения");
+  const kadirHref = kadirSearchUrl(ex.name);
+  const kadirBtn = `<a class="btn btn-primary btn-block" style="margin-top:8px; text-decoration:none; display:block; box-sizing:border-box;" target="_blank" rel="noopener" href="${kadirHref}">🔎 Искать у Kadir UzSports</a>`;
   document.getElementById("videoModalContent").innerHTML = vid ? `
     <h3>${ex.icon} ${ex.name}</h3>
     <p class="small muted" style="margin-top:2px;">${vid.title}</p>
@@ -1615,10 +1653,12 @@ function openVideoModal(exId){
       <iframe src="https://www.youtube-nocookie.com/embed/${vid.videoId}?autoplay=1&rel=0" title="${ex.name}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="eager"></iframe>
     </div>
     <a class="btn btn-ghost btn-block" style="margin-top:12px; text-decoration:none; display:block; box-sizing:border-box;" target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=${vid.videoId}">Открыть на YouTube ↗</a>
+    ${kadirBtn}
   ` : `
     <h3>${ex.icon} ${ex.name}</h3>
     <p class="small muted" style="margin-top:8px;">Видео для этого упражнения пока не подобрано в приложении.</p>
-    <a class="btn btn-primary btn-block" style="margin-top:12px; text-decoration:none; display:block; box-sizing:border-box;" target="_blank" rel="noopener" href="${searchHref}">🔎 Искать на YouTube</a>
+    ${kadirBtn}
+    <a class="btn btn-ghost btn-block" style="margin-top:8px; text-decoration:none; display:block; box-sizing:border-box;" target="_blank" rel="noopener" href="${ytSearchUrl(ex.name+" техника выполнения")}">🔎 Искать на YouTube</a>
   `;
   openModal("modalVideo");
 }
@@ -1724,6 +1764,7 @@ function renderWorkoutRunner(){
     stopRunnerTimer();
     workoutRun.timerSeconds = isTimeBased ? target : 0;
     workoutRun.lastInitializedExIndex = workoutRun.exIndex;
+    speak(ex.name);
   }
 
   document.getElementById("workoutModalContent").innerHTML = `
@@ -1802,6 +1843,7 @@ function toggleRunnerTimer(){
         workoutRun.timerSeconds = 0;
         stopRunnerTimer();
         beep(660,0.4); vibrate([200,80,200]); toast("⏰ Время упражнения вышло");
+        speak("Время вышло");
       }
     } else {
       workoutRun.timerSeconds++;
@@ -1821,7 +1863,7 @@ function startRestTimer(restSec){
     countdownTick(workoutRun.timerSeconds);
     const disp = document.getElementById("runnerTimerDisplay");
     if(disp) disp.textContent = fmtTimer(workoutRun.timerSeconds);
-    if(workoutRun.timerSeconds<=0){ stopRunnerTimer(); beep(660,0.4); vibrate([200,80,200]); toast("Отдых окончен"); }
+    if(workoutRun.timerSeconds<=0){ stopRunnerTimer(); beep(660,0.4); vibrate([200,80,200]); toast("Отдых окончен"); speak("Поехали"); }
   }, 1000);
 }
 function advanceExercise(){
@@ -1881,6 +1923,7 @@ function finishWorkout(){
   });
   document.getElementById("runnerDone").addEventListener("click", ()=>{ closeModal("modalWorkout"); workoutRun=null; renderAll(); });
   beep(880,0.5); vibrate([120,60,120,60,200]);
+  speak("Тренировка завершена. Отличная работа!");
 }
 function fmtDuration(sec){
   const m = Math.floor(sec/60), s = sec%60;
@@ -2005,7 +2048,67 @@ function renderCharts(){
     : "Пока нет истории — начни первую тренировку!";
 
   renderMuscleMap();
+  renderBodyMetrics();
 }
+
+/* ---------- body weight / measurements ---------- */
+function drawLineChart(svgId, points){
+  const svg = document.getElementById(svgId);
+  const emptyEl = document.getElementById(svgId+"Empty");
+  if(!points.length){
+    svg.innerHTML = "";
+    if(emptyEl) emptyEl.style.display = "block";
+    return;
+  }
+  if(emptyEl) emptyEl.style.display = "none";
+  const W=280,H=120, padX=10, padY=16;
+  const values = points.map(p=>p.value);
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = max-min || 1;
+  const n = points.length;
+  const stepX = n>1 ? (W-padX*2)/(n-1) : 0;
+  const coords = points.map((p,i)=>{
+    const x = padX + i*stepX;
+    const y = H-padY - ((p.value-min)/range)*(H-padY*2-8) - 4;
+    return {x,y,label:p.label};
+  });
+  const linePath = coords.map((c,i)=> (i===0?"M":"L")+c.x.toFixed(1)+","+c.y.toFixed(1)).join(" ");
+  const dots = coords.map(c=>`<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3" fill="var(--accent)"/>`).join("");
+  const labels = coords.map((c,i)=> (i===0||i===coords.length-1)
+    ? `<text x="${c.x.toFixed(1)}" y="${H-2}" font-size="8" fill="var(--text-dim)" text-anchor="${i===0?'start':'end'}">${c.label}</text>` : "").join("");
+  svg.innerHTML = `<path d="${linePath}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>${dots}${labels}`;
+}
+const BODY_METRIC_FIELDS = [["bmWeight","weight","Вес","кг"],["bmWaist","waist","Талия","см"],["bmChest","chest","Грудь","см"],["bmArm","arm","Бицепс","см"],["bmThigh","thigh","Бедро","см"]];
+function renderBodyMetrics(){
+  const dates = Object.keys(state.bodyMetrics).sort();
+  const weightPoints = dates.filter(d=> state.bodyMetrics[d].weight!=null).map(d=>({label:d.slice(5), value:state.bodyMetrics[d].weight}));
+  drawLineChart("chartWeight", weightPoints);
+
+  const today = state.bodyMetrics[todayStr()] || {};
+  BODY_METRIC_FIELDS.forEach(([inputId,key])=>{
+    document.getElementById(inputId).value = today[key]!=null ? today[key] : "";
+  });
+
+  const recent = dates.slice(-8).reverse();
+  document.getElementById("bodyMetricsHistory").innerHTML = recent.length ? recent.map(d=>{
+    const m = state.bodyMetrics[d];
+    const parts = BODY_METRIC_FIELDS.filter(([,key])=> m[key]!=null).map(([,key,label,unit])=> `${label}: ${m[key]}${unit}`).join(" · ");
+    return `<p class="small muted" style="margin-top:4px;">${d.slice(5)} — ${parts||"—"}</p>`;
+  }).join("") : `<p class="small muted">Пока нет записей.</p>`;
+}
+document.getElementById("btnSaveBodyMetrics").addEventListener("click", ()=>{
+  const d = todayStr();
+  const entry = {};
+  BODY_METRIC_FIELDS.forEach(([inputId,key])=>{
+    const raw = document.getElementById(inputId).value;
+    if(raw!=="") entry[key] = parseFloat(raw);
+  });
+  if(Object.keys(entry).length===0){ toast("Заполни хотя бы одно поле"); return; }
+  state.bodyMetrics[d] = entry;
+  saveState();
+  renderBodyMetrics();
+  toast("Замеры сохранены ✅");
+});
 
 /* ---------- muscle body map (front/back SVG, colored by relative volume) ---------- */
 function muscleColor(pct){ return `color-mix(in srgb, var(--accent) ${Math.round(pct*100)}%, var(--card-border))`; }
@@ -2313,12 +2416,15 @@ function renderSettingsToggles(){
   const sBtn = document.getElementById("toggleSound");
   const vBtn = document.getElementById("toggleVibration");
   const mBtn = document.getElementById("toggleMusic");
+  const voBtn = document.getElementById("toggleVoice");
   sBtn.classList.toggle("on", state.settings.sound!==false);
   vBtn.classList.toggle("on", state.settings.vibration!==false);
   mBtn.classList.toggle("on", state.settings.music!==false);
+  voBtn.classList.toggle("on", state.settings.voice!==false);
   sBtn.textContent = (state.settings.sound!==false ? "🔊" : "🔇") + " Звук";
   vBtn.textContent = (state.settings.vibration!==false ? "📳" : "🚫") + " Вибрация";
   mBtn.textContent = (state.settings.music!==false ? "🎵" : "🔕") + " Музыка";
+  voBtn.textContent = (state.settings.voice!==false ? "🗣" : "🤐") + " Голос";
 }
 document.getElementById("toggleSound").addEventListener("click", ()=>{
   state.settings.sound = state.settings.sound===false ? true : false;
@@ -2335,6 +2441,11 @@ document.getElementById("toggleMusic").addEventListener("click", ()=>{
   saveState(); renderSettingsToggles();
   if(state.settings.music && document.getElementById("modalWorkout").classList.contains("open")) startWorkoutBeat();
   else stopWorkoutBeat();
+});
+document.getElementById("toggleVoice").addEventListener("click", ()=>{
+  state.settings.voice = state.settings.voice===false ? true : false;
+  saveState(); renderSettingsToggles();
+  if(state.settings.voice) speak("Голос включён");
 });
 
 /* ---------- Export / Import ---------- */
@@ -2612,7 +2723,7 @@ function openModal(id){
 }
 function closeModal(id){
   document.getElementById(id).classList.remove("open");
-  if(id==="modalWorkout"){ releaseWakeLock(); stopWorkoutBeat(); }
+  if(id==="modalWorkout"){ releaseWakeLock(); stopWorkoutBeat(); try{ speechSynthesis.cancel(); }catch(e){} }
   if(id==="modalVideo"){
     const c = document.getElementById("videoModalContent");
     if(c) c.innerHTML = ""; // stops YouTube playback when the modal closes
