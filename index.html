@@ -243,6 +243,9 @@
   .video-embed{position:relative; width:100%; padding-top:56.25%; border-radius:var(--radius-tile); overflow:hidden; background:#000;}
   .video-embed iframe{position:absolute; inset:0; width:100%; height:100%; border:0;}
 
+  .pose-box{background:var(--card); border:1px solid var(--card-border); border-radius:var(--radius-tile); display:flex; align-items:center; justify-content:center; padding:10px;}
+  .pose-box svg{width:104px; height:104px; color:var(--accent); display:block;}
+
   .toast-wrap{position:fixed; top:14px; left:0; right:0; display:flex; justify-content:center; z-index:200; pointer-events:none;}
   .toast{background:var(--bg2); border:1px solid var(--card-border); padding:11px 18px; border-radius:10px; font-size:13.5px; font-weight:700; box-shadow:3px 3px 0 0 color-mix(in srgb, var(--accent) 45%, transparent); animation:toastIn .3s ease, toastOut .3s ease 2.4s forwards;}
   @keyframes toastIn{from{opacity:0; transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
@@ -533,7 +536,9 @@
       <div class="row wrap" style="margin-top:8px;">
         <button class="chip" id="toggleSound" data-key="sound">🔊 Звук</button>
         <button class="chip" id="toggleVibration" data-key="vibration">📳 Вибрация</button>
+        <button class="chip" id="toggleMusic" data-key="music">🎵 Музыка</button>
       </div>
+      <p class="small muted" style="margin-top:8px;">Музыка — это бит, который генерируется прямо в приложении (без интернета и авторских прав), чтобы держать темп во время тренировки.</p>
     </div>
 
     <div class="card">
@@ -782,6 +787,72 @@ function countdownTick(remaining){
   if(remaining===3 || remaining===2 || remaining===1){ beep(520,0.12); vibrate(25); }
 }
 
+/* ---------- generated workout beat (offline, royalty-free — built in the browser, no file to fetch) ---------- */
+function ensureAudioCtx(){
+  audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==="suspended") audioCtx.resume().catch(()=>{});
+  return audioCtx;
+}
+const BEAT_BPM = 126;
+const BEAT_STEP_DUR = 60/BEAT_BPM/4; // seconds per 16th note
+const BEAT_LOOP_LEN = 32; // two bars
+const BEAT_KICK_STEPS = new Set([0,6,8,14,16,22,24,27,30]);
+const BEAT_HAT_STEPS  = new Set([1,2,3,5,6,7,9,10,11,13,14,15,17,18,19,21,22,23,25,26,27,29,30,31]);
+const BEAT_BASS_STEPS = {0:0, 8:-5, 16:0, 24:-3};
+function beatKick(t){
+  const ctx = ensureAudioCtx();
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = "sine"; o.frequency.setValueAtTime(150,t); o.frequency.exponentialRampToValueAtTime(45,t+0.12);
+  g.gain.setValueAtTime(0.7,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.15);
+  o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t+0.16);
+}
+function beatHat(t){
+  const ctx = ensureAudioCtx();
+  const bufSize = Math.floor(ctx.sampleRate*0.05);
+  const buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for(let i=0;i<bufSize;i++) data[i] = (Math.random()*2-1) * (1 - i/bufSize);
+  const noise = ctx.createBufferSource(); noise.buffer = buffer;
+  const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 7000;
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.18,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.05);
+  noise.connect(hp); hp.connect(g); g.connect(ctx.destination); noise.start(t); noise.stop(t+0.06);
+}
+function beatBass(t, semitone){
+  const ctx = ensureAudioCtx();
+  const freq = 55 * Math.pow(2, semitone/12); // relative to A1
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = "triangle"; o.frequency.setValueAtTime(freq,t);
+  g.gain.setValueAtTime(0.001,t); g.gain.linearRampToValueAtTime(0.28,t+0.02); g.gain.exponentialRampToValueAtTime(0.001,t+0.35);
+  o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t+0.36);
+}
+let workoutBeat = {playing:false, nextTime:0, step:0, timerId:null};
+function beatSchedulerTick(){
+  const ctx = ensureAudioCtx();
+  while(workoutBeat.nextTime < ctx.currentTime + 0.12){
+    const s = workoutBeat.step % BEAT_LOOP_LEN;
+    if(BEAT_KICK_STEPS.has(s)) beatKick(workoutBeat.nextTime);
+    if(BEAT_HAT_STEPS.has(s)) beatHat(workoutBeat.nextTime);
+    if(s in BEAT_BASS_STEPS) beatBass(workoutBeat.nextTime, BEAT_BASS_STEPS[s]);
+    workoutBeat.nextTime += BEAT_STEP_DUR;
+    workoutBeat.step++;
+  }
+}
+function startWorkoutBeat(){
+  if(workoutBeat.playing) return;
+  const ctx = ensureAudioCtx();
+  workoutBeat.playing = true;
+  workoutBeat.step = 0;
+  workoutBeat.nextTime = ctx.currentTime + 0.05;
+  workoutBeat.timerId = setInterval(beatSchedulerTick, 50);
+}
+function stopWorkoutBeat(){
+  workoutBeat.playing = false;
+  if(workoutBeat.timerId){ clearInterval(workoutBeat.timerId); workoutBeat.timerId = null; }
+}
+function toggleWorkoutBeat(){
+  if(workoutBeat.playing) stopWorkoutBeat(); else startWorkoutBeat();
+}
+
 /* ---------- exercise library (25 упражнений) ---------- */
 const EXERCISES = [
   {id:"pushups", name:"Отжимания", icon:"💪", category:"pushups", level:"Средний",
@@ -918,6 +989,100 @@ const EX_VIDEOS = {
 };
 function exerciseVideo(exId){ return EX_VIDEOS[exId] || null; }
 
+/* ---------- technique pose illustrations (self-contained SVG — always renders, no network needed) ---------- */
+const POSES = {
+  pushup_floor: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="8" y1="100" x2="112" y2="100"/><line x1="32" y1="100" x2="32" y2="76"/>
+    <line x1="32" y1="76" x2="88" y2="58"/><line x1="88" y1="58" x2="106" y2="100"/>
+    <line x1="52" y1="82" x2="72" y2="66"/></g><circle cx="94" cy="48" r="9" fill="currentColor"/></svg>`,
+  pushup_incline: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="8" y1="100" x2="112" y2="100"/><rect x="16" y="82" width="26" height="18" rx="2"/>
+    <line x1="34" y1="82" x2="34" y2="70"/><line x1="34" y1="70" x2="88" y2="52"/>
+    <line x1="88" y1="52" x2="106" y2="100"/></g><circle cx="94" cy="42" r="9" fill="currentColor"/></svg>`,
+  pullup: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="14" y1="16" x2="106" y2="16"/><line x1="38" y1="16" x2="60" y2="46"/>
+    <line x1="82" y1="16" x2="60" y2="46"/><line x1="60" y1="46" x2="58" y2="82"/>
+    <line x1="58" y1="82" x2="44" y2="108"/><line x1="58" y1="82" x2="70" y2="104"/>
+    </g><circle cx="60" cy="32" r="9" fill="currentColor"/></svg>`,
+  band_row: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="10" y1="108" x2="110" y2="108"/><line x1="52" y1="88" x2="52" y2="108"/>
+    <line x1="52" y1="88" x2="48" y2="52"/><line x1="100" y1="106" x2="74" y2="62" stroke-dasharray="3 7"/>
+    <line x1="74" y1="62" x2="58" y2="54"/><line x1="58" y1="54" x2="48" y2="58"/>
+    </g><circle cx="46" cy="40" r="9" fill="currentColor"/></svg>`,
+  squat: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="16" y1="108" x2="104" y2="108"/><line x1="60" y1="60" x2="40" y2="84"/>
+    <line x1="40" y1="84" x2="30" y2="108"/><line x1="60" y1="60" x2="80" y2="84"/>
+    <line x1="80" y1="84" x2="90" y2="108"/><line x1="60" y1="60" x2="60" y2="40"/>
+    <line x1="60" y1="46" x2="38" y2="60"/><line x1="60" y1="46" x2="82" y2="60"/>
+    </g><circle cx="60" cy="28" r="9" fill="currentColor"/></svg>`,
+  wallsit: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="100" y1="8" x2="100" y2="112"/><line x1="16" y1="112" x2="104" y2="112"/>
+    <line x1="92" y1="50" x2="92" y2="78"/><line x1="92" y1="78" x2="58" y2="78"/>
+    <line x1="58" y1="78" x2="58" y2="112"/><line x1="92" y1="58" x2="74" y2="70"/>
+    </g><circle cx="92" cy="40" r="9" fill="currentColor"/></svg>`,
+  lunge: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="10" y1="110" x2="110" y2="110"/><line x1="54" y1="56" x2="30" y2="80"/>
+    <line x1="30" y1="80" x2="30" y2="110"/><line x1="54" y1="56" x2="76" y2="76"/>
+    <line x1="76" y1="76" x2="94" y2="110"/><line x1="54" y1="56" x2="54" y2="34"/>
+    <line x1="54" y1="42" x2="36" y2="54"/><line x1="54" y1="42" x2="72" y2="52"/>
+    </g><circle cx="54" cy="22" r="9" fill="currentColor"/></svg>`,
+  glute_bridge: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="8" y1="100" x2="112" y2="100"/><line x1="18" y1="88" x2="52" y2="70"/>
+    <line x1="52" y1="70" x2="80" y2="88"/><line x1="80" y1="88" x2="80" y2="100"/>
+    <line x1="52" y1="70" x2="52" y2="100"/></g><circle cx="10" cy="84" r="9" fill="currentColor"/></svg>`,
+  plank: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="8" y1="100" x2="112" y2="100"/><line x1="30" y1="100" x2="30" y2="84"/>
+    <line x1="30" y1="84" x2="92" y2="64"/><line x1="92" y1="64" x2="108" y2="100"/>
+    </g><circle cx="98" cy="56" r="9" fill="currentColor"/></svg>`,
+  side_plank: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="8" y1="102" x2="112" y2="102"/><line x1="30" y1="102" x2="34" y2="82"/>
+    <line x1="34" y1="82" x2="94" y2="66"/><line x1="94" y1="66" x2="108" y2="98"/>
+    <line x1="55" y1="76" x2="60" y2="38"/></g><circle cx="100" cy="58" r="9" fill="currentColor"/></svg>`,
+  deadbug: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="8" y1="102" x2="112" y2="102"/><line x1="20" y1="88" x2="88" y2="88"/>
+    <line x1="30" y1="88" x2="14" y2="50"/><line x1="78" y1="88" x2="100" y2="60"/>
+    <line x1="78" y1="88" x2="94" y2="102"/><line x1="30" y1="88" x2="46" y2="102"/>
+    </g><circle cx="14" cy="86" r="9" fill="currentColor"/></svg>`,
+  birddog: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="8" y1="108" x2="112" y2="108"/><line x1="36" y1="108" x2="36" y2="86"/>
+    <line x1="36" y1="86" x2="80" y2="70"/><line x1="80" y1="70" x2="80" y2="108"/>
+    <line x1="80" y1="70" x2="108" y2="52"/><line x1="36" y1="86" x2="14" y2="98"/>
+    </g><circle cx="88" cy="62" r="9" fill="currentColor"/></svg>`,
+  calf_raise: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="16" y1="108" x2="104" y2="108"/><line x1="60" y1="100" x2="52" y2="108"/>
+    <line x1="60" y1="100" x2="68" y2="108"/><line x1="60" y1="100" x2="60" y2="60"/>
+    <line x1="60" y1="66" x2="42" y2="52"/><line x1="60" y1="66" x2="78" y2="52"/>
+    </g><circle cx="60" cy="48" r="9" fill="currentColor"/></svg>`,
+  warmup: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="16" y1="108" x2="104" y2="108"/><line x1="60" y1="100" x2="60" y2="62"/>
+    <path d="M60 78 C 78 78, 90 66, 84 48"/><line x1="60" y1="78" x2="36" y2="94"/>
+    <line x1="60" y1="100" x2="46" y2="108"/><line x1="60" y1="100" x2="74" y2="108"/>
+    </g><circle cx="60" cy="50" r="9" fill="currentColor"/></svg>`,
+  walking: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="10" y1="108" x2="110" y2="108"/><line x1="58" y1="50" x2="58" y2="78"/>
+    <line x1="58" y1="78" x2="78" y2="108"/><line x1="58" y1="78" x2="46" y2="94"/>
+    <line x1="46" y1="94" x2="52" y2="108"/><line x1="58" y1="58" x2="40" y2="70"/>
+    <line x1="58" y1="58" x2="76" y2="66"/></g><circle cx="58" cy="40" r="9" fill="currentColor"/></svg>`,
+  stretch: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="14" y1="108" x2="104" y2="108"/><line x1="64" y1="72" x2="64" y2="108"/>
+    <line x1="64" y1="72" x2="28" y2="66"/><line x1="28" y1="66" x2="30" y2="102"/>
+    </g><circle cx="24" cy="64" r="9" fill="currentColor"/></svg>`,
+  full_body: `<svg viewBox="0 0 120 120"><g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="60" y1="70" x2="60" y2="42"/><line x1="60" y1="48" x2="30" y2="24"/>
+    <line x1="60" y1="48" x2="90" y2="24"/><line x1="60" y1="70" x2="30" y2="108"/>
+    <line x1="60" y1="70" x2="90" y2="108"/></g><circle cx="60" cy="30" r="9" fill="currentColor"/></svg>`,
+};
+const EX_POSE = {
+  pushups:"pushup_floor", incline_pushups:"pushup_incline", pullups:"pullup", easy_pullups:"pullup",
+  band_row:"band_row", squats:"squat", wallsit:"wallsit", lunges:"lunge", reverse_lunges:"lunge", stepups:"lunge",
+  glute_bridge:"glute_bridge", plank:"plank", incline_plank:"plank", side_plank:"side_plank",
+  deadbug:"deadbug", birddog:"birddog", calf_raises:"calf_raise",
+  warmup:"warmup", mobility:"warmup", shoulder_circles:"warmup",
+  walking:"walking", march_in_place:"walking",
+  calf_stretch:"stretch", hamstring_stretch:"stretch", full_body:"full_body",
+};
+function exercisePoseSvg(exId){ return POSES[EX_POSE[exId]] || POSES.full_body; }
+
 /* ---------- 90-day challenge template ---------- */
 const DAY_TEMPLATES = [
   {title:"Полное тело", category:"full_body", exIds:["warmup","full_body","pushups","squats","plank"]},
@@ -1019,7 +1184,7 @@ function defaultState(){
     customWorkouts: [],     // saved custom plans {id,name,exIds:[]}
     activeCustomPlanForDay: {}, // dateStr -> planId or 'default'
     streakHistory: [],      // list of {date, streak}
-    settings: {sound:true, vibration:true},
+    settings: {sound:true, vibration:true, music:true},
     personalRecords: {},    // exerciseId -> {value, unit, date}
     workoutHistory: [],     // {date, title, exercisesCount, setsCount, durationSec, xp, rpe}
     customExercises: [],    // user-created exercises, same shape as EXERCISES + custom:true
@@ -1429,6 +1594,7 @@ function openExerciseModal(exId){
       <div><h3>${ex.name}</h3><span class="pill pill-accent">${ex.level}</span></div>
     </div>
     <p style="margin-top:12px;">${ex.desc}</p>
+    <div class="pose-box" style="margin-top:12px;">${exercisePoseSvg(ex.id)}</div>
     <h4 style="margin-top:12px;">Техника выполнения</h4>
     <p class="small muted">${ex.technique}</p>
     <div class="grid3" style="margin-top:12px;">
@@ -1493,8 +1659,8 @@ function startWorkoutRun(exList, title){
     lastInitializedExIndex: -1,
     startedAt: Date.now(),
   };
-  renderWorkoutRunner();
   openModal("modalWorkout");
+  renderWorkoutRunner();
 }
 
 function currentRunExercise(){ return workoutRun.exercises[workoutRun.exIndex]; }
@@ -1523,7 +1689,11 @@ function renderWorkoutRunner(){
   document.getElementById("workoutModalContent").innerHTML = `
     <p class="small muted">EXERCISE ${workoutRun.exIndex+1} / ${total}</p>
     <h3>${ex.icon} ${ex.name}</h3>
-    <button id="runnerVideoBtn" class="pill pill-accent" style="font-family:inherit; cursor:pointer; margin-top:4px; display:inline-block;">▶️ Видео техники</button>
+    <div class="pose-box" style="margin-top:8px;">${exercisePoseSvg(ex.id)}</div>
+    <div class="row wrap" style="gap:6px; margin-top:8px;">
+      <button id="runnerVideoBtn" class="pill pill-accent" style="font-family:inherit; cursor:pointer;">▶️ Видео техники</button>
+      <button id="runnerBeatBtn" class="pill ${workoutBeat.playing?'pill-accent':''}" style="font-family:inherit; cursor:pointer;">${workoutBeat.playing?'🎵 Бит вкл':'🔕 Бит выкл'}</button>
+    </div>
     <p class="small muted" style="margin-top:8px;">${cur.sets} подхода(ов) · ${cur.reps}</p>
     <div class="row wrap" style="margin-top:10px; gap:6px;" id="runnerSets">
       ${Array.from({length:cur.sets}).map((_,i)=>`<button class="chip ${i<cur.doneSets?'on':''}" data-setidx="${i}">Подход ${i+1}${i<cur.doneSets?' ✓':''}</button>`).join("")}
@@ -1571,6 +1741,12 @@ function renderWorkoutRunner(){
   document.getElementById("runnerSkip").addEventListener("click", advanceExercise);
   document.getElementById("runnerNext").addEventListener("click", advanceExercise);
   document.getElementById("runnerVideoBtn").addEventListener("click", ()=> openVideoModal(cur.exerciseId));
+  document.getElementById("runnerBeatBtn").addEventListener("click", ()=>{
+    toggleWorkoutBeat();
+    state.settings.music = workoutBeat.playing;
+    saveState();
+    renderWorkoutRunner();
+  });
 }
 function fmtTimer(sec){ sec=Math.max(0,Math.round(sec)); return pad2(Math.floor(sec/60))+":"+pad2(sec%60); }
 
@@ -2017,10 +2193,13 @@ function renderCustomWorkoutsList(){
 function renderSettingsToggles(){
   const sBtn = document.getElementById("toggleSound");
   const vBtn = document.getElementById("toggleVibration");
+  const mBtn = document.getElementById("toggleMusic");
   sBtn.classList.toggle("on", state.settings.sound!==false);
   vBtn.classList.toggle("on", state.settings.vibration!==false);
+  mBtn.classList.toggle("on", state.settings.music!==false);
   sBtn.textContent = (state.settings.sound!==false ? "🔊" : "🔇") + " Звук";
   vBtn.textContent = (state.settings.vibration!==false ? "📳" : "🚫") + " Вибрация";
+  mBtn.textContent = (state.settings.music!==false ? "🎵" : "🔕") + " Музыка";
 }
 document.getElementById("toggleSound").addEventListener("click", ()=>{
   state.settings.sound = state.settings.sound===false ? true : false;
@@ -2031,6 +2210,12 @@ document.getElementById("toggleVibration").addEventListener("click", ()=>{
   state.settings.vibration = state.settings.vibration===false ? true : false;
   saveState(); renderSettingsToggles();
   if(state.settings.vibration) vibrate(80);
+});
+document.getElementById("toggleMusic").addEventListener("click", ()=>{
+  state.settings.music = state.settings.music===false ? true : false;
+  saveState(); renderSettingsToggles();
+  if(state.settings.music && document.getElementById("modalWorkout").classList.contains("open")) startWorkoutBeat();
+  else stopWorkoutBeat();
 });
 
 /* ---------- Export / Import ---------- */
@@ -2303,14 +2488,16 @@ document.getElementById("btnChangeWorkout").addEventListener("click", ()=> openB
    ========================================================= */
 function openModal(id){
   document.getElementById(id).classList.add("open");
-  if(id==="modalWorkout") requestWakeLock(); // don't let the screen lock mid-set at the gym
+  if(id==="modalWorkout"){ requestWakeLock(); if(state.settings.music!==false) startWorkoutBeat(); } // don't let the screen lock mid-set at the gym
+  if(id==="modalVideo") stopWorkoutBeat(); // don't fight the video's own audio
 }
 function closeModal(id){
   document.getElementById(id).classList.remove("open");
-  if(id==="modalWorkout") releaseWakeLock();
+  if(id==="modalWorkout"){ releaseWakeLock(); stopWorkoutBeat(); }
   if(id==="modalVideo"){
     const c = document.getElementById("videoModalContent");
     if(c) c.innerHTML = ""; // stops YouTube playback when the modal closes
+    if(state.settings.music!==false && document.getElementById("modalWorkout").classList.contains("open")) startWorkoutBeat(); // resume the beat if the workout is still running underneath
   }
 }
 document.querySelectorAll(".modal-backdrop").forEach(bd=>{
